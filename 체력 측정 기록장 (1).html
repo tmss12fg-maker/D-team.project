@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>체력 측정 기록장</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* ===== 1. 디자인 토큰 (색, 글꼴, 간격을 한곳에서 관리) ===== */
+    :root {
+      --bg: #f3f5f8;          /* 페이지 배경 */
+      --panel: #ffffff;       /* 카드(패널) 배경 */
+      --subtle: #f7f8fb;      /* 표 머리글, 요약 칸 배경 */
+      --ink: #141b2d;         /* 기본 글자 */
+      --muted: #5d6678;       /* 보조 글자 */
+      --line: #dce1e8;        /* 테두리 */
+      --accent: #2b4fd8;      /* 주요 색 (코발트 블루) */
+      --accent-ink: #ffffff;
+      --accent-soft: #e8edff;
+      --gold: #c98a0b;        /* 1위 강조 */
+      --error: #c0352b;
+      --error-bg: #fdeeec;
+      --ok-ink: #1e6b45;
+      --ok-bg: #eaf4ee;
+      --bar-bg: #141b2d;      /* 상단 막대 */
+      --bar-ink: #ffffff;
+      --bar-muted: #a9b2c6;
+      --shadow: 0 1px 2px rgba(20, 27, 45, 0.06);
+      --radius: 10px;
+      --font: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        color-scheme: dark;
+        --bg: #0f1420; --panel: #171e2e; --subtle: #1c2436; --ink: #e6eaf2; --muted: #9aa4b8;
+        --line: #2a3347; --accent: #7c98ff; --accent-ink: #0f1420; --accent-soft: #1f2a4a;
+        --gold: #f0b74a; --error: #ff8f84; --error-bg: #3a1d1b; --ok-ink: #8fd9b1; --ok-bg: #17302a;
+        --bar-bg: #171e2e; --bar-ink: #e6eaf2; --bar-muted: #9aa4b8; --shadow: none;
+      }
+    }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #0f1420; --panel: #171e2e; --subtle: #1c2436; --ink: #e6eaf2; --muted: #9aa4b8;
+      --line: #2a3347; --accent: #7c98ff; --accent-ink: #0f1420; --accent-soft: #1f2a4a;
+      --gold: #f0b74a; --error: #ff8f84; --error-bg: #3a1d1b; --ok-ink: #8fd9b1; --ok-bg: #17302a;
+      --bar-bg: #171e2e; --bar-ink: #e6eaf2; --bar-muted: #9aa4b8; --shadow: none;
+    }
+    :root {
+      box-sizing: border-box;
+      padding-top: env(safe-area-inset-top, 0px);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    html { scroll-padding-top: calc(env(safe-area-inset-top, 0px) + 64px); }
+
+    /* ===== 2. 기본 ===== */
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--font);
+      font-size: 15px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    /* 휴대폰 상단 상태 표시줄 뒤를 상단 막대 색으로 채움 */
+    body::before {
+      content: ""; position: fixed; inset: 0 0 auto;
+      height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bar-bg);
+    }
+
+    /* ===== 3. 상단 막대와 탭 ===== */
+    .app-bar {
+      position: sticky;
+      top: env(safe-area-inset-top, 0px);
+      z-index: 5;
+      background: var(--bar-bg);
+      color: var(--bar-ink);
+      border-bottom: 1px solid var(--line);
+    }
+    .app-bar-inner {
+      max-width: 1120px; margin: 0 auto; padding: 0 24px;
+      height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1rem; }
+    /* 트랙 레인을 닮은 작은 로고 */
+    .brand-mark {
+      width: 22px; height: 22px; border-radius: 6px;
+      background: repeating-linear-gradient(90deg, var(--accent) 0 4px, transparent 4px 7px);
+      border: 1px solid var(--accent);
+    }
+    .tabs { display: flex; gap: 4px; height: 100%; }
+    .tabs a {
+      display: flex; align-items: center; padding: 0 14px;
+      color: var(--bar-muted); text-decoration: none; font-weight: 600;
+      border-bottom: 2px solid transparent;
+    }
+    .tabs a:hover { color: var(--bar-ink); }
+    .tabs a[aria-current="page"] { color: var(--bar-ink); border-bottom-color: var(--accent); }
+
+    /* ===== 4. 페이지 레이아웃 ===== */
+    main { max-width: 1120px; margin: 0 auto; padding: 32px 24px 64px; }
+    h1 { font-size: 1.75rem; line-height: 1.25; margin: 0 0 6px; letter-spacing: -0.02em; }
+    .intro { color: var(--muted); margin: 0 0 28px; max-width: 60ch; }
+    h2 { font-size: 1.05rem; margin: 0 0 18px; letter-spacing: -0.01em; }
+    h3 { font-size: 0.95rem; margin: 24px 0 10px; color: var(--muted); font-weight: 600; }
+
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+
+    /* 넓은 화면: 왼쪽 입력, 오른쪽 기록 표 */
+    @media (min-width: 960px) {
+      #view-record:not([hidden]) {
+        display: grid;
+        grid-template-columns: 340px minmax(0, 1fr);
+        column-gap: 20px;
+        align-items: start;
+      }
+      #view-record > h1, #view-record > .intro { grid-column: 1 / -1; }
+      #view-record > section:first-of-type { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 76px); }
+    }
+
+    /* ===== 5. 입력 폼 ===== */
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 4px 16px; }
+    label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; }
+    input, select {
+      width: 100%; height: 42px; padding: 0 12px;
+      font: inherit; color: var(--ink);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      transition: border-color 0.15s;
+    }
+    input::placeholder { color: var(--muted); opacity: 0.7; }
+    input:hover, select:hover { border-color: var(--muted); }
+    input:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    button:focus-visible, .tabs a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .invalid, .invalid:hover { border-color: var(--error); }
+    .invalid:focus { border-color: var(--error); box-shadow: 0 0 0 3px var(--error-bg); }
+
+    .value-wrap { position: relative; }
+    .value-wrap input { padding-right: 52px; }
+    /* 단위를 입력칸 안쪽 오른쪽에 붙여 표시 */
+    .unit {
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      color: var(--muted); font-weight: 600; font-size: 0.9rem; pointer-events: none;
+    }
+    .hint { font-size: 0.8rem; color: var(--muted); margin: 6px 0 0; }
+    .field-error { font-size: 0.8rem; color: var(--error); margin: 2px 0 4px; min-height: 1.2em; line-height: 1.4; }
+
+    /* ===== 6. 버튼 ===== */
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    button {
+      height: 42px; padding: 0 18px;
+      font: inherit; font-weight: 600;
+      border-radius: 8px; border: 1px solid transparent;
+      cursor: pointer; transition: background 0.15s, border-color 0.15s;
+    }
+    .btn-primary { background: var(--accent); color: var(--accent-ink); }
+    .btn-primary:hover { filter: brightness(1.08); }
+    #add-btn { flex: 1; }
+    .btn-plain { background: transparent; color: var(--ink); border-color: var(--line); }
+    .btn-plain:hover { background: var(--subtle); }
+    .btn-delete {
+      height: 32px; padding: 0 12px; font-size: 0.85rem;
+      background: transparent; color: var(--error); border-color: var(--line);
+    }
+    .btn-delete:hover { border-color: var(--error); background: var(--error-bg); }
+    .btn-analyze { height: 32px; padding: 0 14px; font-size: 0.85rem; }
+
+    /* ===== 7. 안내 메시지 ===== */
+    #message { display: none; padding: 12px 14px; border-radius: 8px; margin-top: 16px; font-size: 0.9rem; }
+    #message.error { display: block; background: var(--error-bg); color: var(--error); }
+    #message.success { display: block; background: var(--ok-bg); color: var(--ok-ink); }
+    #message ul { margin: 6px 0 0; padding-left: 18px; }
+
+    /* ===== 8. 기록 표 ===== */
+    .table-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+    .table-head h2 { margin: 0; }
+    #count { color: var(--accent); }
+    .table-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .save-status { font-size: 0.8rem; color: var(--muted); margin-right: 4px; }
+    .table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; min-width: 560px; font-size: 0.92rem; }
+    th, td { padding: 11px 14px; text-align: left; }
+    th {
+      background: var(--subtle); color: var(--muted);
+      font-size: 0.8rem; font-weight: 600; border-bottom: 1px solid var(--line); white-space: nowrap;
+    }
+    td { border-bottom: 1px solid var(--line); }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: var(--subtle); }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    /* 숫자 열은 머리글도 오른쪽 정렬 */
+    #view-record th:nth-child(1), #view-record th:nth-child(6),
+    #view-analysis th:nth-child(3), #view-analysis th:nth-child(4) { text-align: right; }
+    .empty { text-align: center; color: var(--muted); padding: 40px 12px; }
+    tbody tr:hover td.empty { background: transparent; }
+
+    /* ===== 9. 분석 결과 화면 ===== */
+    [hidden] { display: none !important; }
+    .stats {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px; margin: 0 0 4px;
+    }
+    .stat { background: var(--subtle); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+    .stat dt { color: var(--muted); font-size: 0.8rem; font-weight: 500; }
+    .stat dd {
+      margin: 2px 0 0; font-size: 1.35rem; font-weight: 700;
+      font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+    }
+    .stat small { display: block; font-size: 0.8rem; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+    .item-note { color: var(--muted); font-size: 0.85rem; margin: -12px 0 18px; }
+
+    /* 순위 막대그래프: 1위만 금색으로 강조 */
+    .bar-row {
+      display: grid; grid-template-columns: minmax(7em, 11em) 1fr 6em;
+      gap: 12px; align-items: center; padding: 6px 0;
+    }
+    .bar-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+    .rank {
+      display: inline-block; min-width: 2.6em; margin-right: 6px;
+      color: var(--muted); font-size: 0.8rem; font-weight: 600; font-variant-numeric: tabular-nums;
+    }
+    .bar-track { height: 10px; background: var(--subtle); border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+    .bar-fill { height: 100%; background: var(--accent); border-radius: 5px; }
+    .bar-value { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+    .is-first .rank { color: var(--gold); }
+    .is-first .bar-fill { background: var(--gold); }
+
+    /* 성별 점 그래프 */
+    .chart-wrap { --female: #c2417a; }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) .chart-wrap { --female: #ff8fbd; }
+    }
+    :root[data-theme="dark"] .chart-wrap { --female: #ff8fbd; }
+    .chart-box { border: 1px solid var(--line); border-radius: 8px; padding: 12px 8px 4px; }
+    .chart-box svg { display: block; width: 100%; height: auto; }
+    .chart-box text { font-family: var(--font); }
+    .chart-box .grid-line { stroke: var(--line); stroke-dasharray: 2 4; }
+    .chart-box .baseline { stroke: var(--line); }
+    .chart-box .tick { fill: var(--muted); font-size: 12px; }
+    .chart-box .row-label { fill: var(--ink); font-size: 14px; font-weight: 600; }
+    .chart-box .row-count { fill: var(--muted); font-size: 12px; }
+    .chart-box .dot { stroke: var(--panel); stroke-width: 2; }
+    .chart-box .dot.male { fill: var(--accent); }
+    .chart-box .dot.female { fill: var(--female); }
+    .chart-box .avg { stroke: var(--ink); stroke-width: 3; stroke-linecap: round; }
+    .chart-box .avg-label { fill: var(--ink); font-size: 12px; font-weight: 600; }
+    .chart-caption { color: var(--muted); font-size: 0.8rem; margin: 8px 0 0; }
+    .chart-box .range { stroke-width: 12; stroke-linecap: round; opacity: 0.18; }
+    .chart-box .range.male { stroke: var(--accent); }
+    .chart-box .range.female { stroke: var(--female); }
+    .chart-box .minmax-label { fill: var(--muted); font-size: 12px; font-weight: 500; }
+    .chart-wrap .table-scroll { margin-top: 12px; }
+    .chart-wrap table { min-width: 440px; }
+    #view-analysis .chart-wrap th:not(:first-child) { text-align: right; }
+    .gender-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+    .gender-swatch.male { background: var(--accent); }
+    .gender-swatch.female { background: var(--female); }
+
+    /* 최댓값 / 최솟값 별도 그래프 */
+    .minmax-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+    .minmax-card { border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+    .minmax-card h4 { margin: 0; font-size: 0.95rem; }
+    .minmax-card .sub { margin: 0 0 10px; font-size: 0.8rem; color: var(--muted); }
+    .mm-row { display: grid; grid-template-columns: 4.2em 1fr 4.6em; gap: 10px; align-items: center; padding: 6px 0 0; }
+    .mm-label { font-weight: 600; font-size: 0.9rem; white-space: nowrap; }
+    .mm-track { height: 22px; background: var(--subtle); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+    .mm-fill { height: 100%; }
+    .mm-fill.male { background: var(--accent); }
+    .mm-fill.female { background: var(--female); }
+    .mm-value { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .mm-who { grid-column: 2 / -1; font-size: 0.8rem; color: var(--muted); margin: 2px 0 4px; }
+    .mm-diff { margin: 10px 0 0; padding-top: 10px; border-top: 1px solid var(--line); font-size: 0.85rem; }
+
+    @media (max-width: 560px) {
+      main { padding: 24px 16px 48px; }
+      .app-bar-inner { padding: 0 16px; }
+      section { padding: 18px; }
+      h1 { font-size: 1.45rem; }
+      .bar-row { grid-template-columns: 7em 1fr 4.8em; gap: 8px; }
+      .tabs a { padding: 0 10px; }
+    }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  </style>
+</head>
+<body>
+  <header class="app-bar">
+    <div class="app-bar-inner">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"></span>체력 측정 기록장</div>
+      <nav class="tabs" aria-label="화면 이동">
+        <a href="#" id="tab-record">기록</a>
+        <a href="#analysis" id="tab-analysis">분석</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <!-- ========== 화면 1: 기록 화면 ========== -->
+    <div id="view-record">
+    <h1>측정 기록</h1>
+    <p class="intro">측정 결과를 입력하면 표에 쌓이고, 바뀔 때마다 자동으로 저장됩니다.</p>
+
+    <!-- ========== 입력 영역 ========== -->
+    <section>
+      <h2>측정 결과 입력</h2>
+      <div class="grid">
+        <div>
+          <label for="name">이름 또는 별칭</label>
+          <input type="text" id="name" maxlength="20" placeholder="예: 김민준, 달리기왕">
+          <p class="field-error" id="name-error"></p>
+        </div>
+        <div>
+          <label for="age">나이</label>
+          <input type="text" id="age" inputmode="numeric" placeholder="예: 21">
+          <p class="field-error" id="age-error"></p>
+        </div>
+        <div>
+          <label for="gender">성별</label>
+          <select id="gender">
+            <option value="">선택하세요</option>
+            <option value="남성">남성</option>
+            <option value="여성">여성</option>
+            <option value="선택 안 함">선택 안 함</option>
+          </select>
+          <p class="field-error" id="gender-error"></p>
+        </div>
+        <div>
+          <label for="item">측정 항목</label>
+          <select id="item">
+            <option value="">선택하세요</option>
+          </select>
+          <p class="field-error" id="item-error"></p>
+        </div>
+        <div>
+          <label for="value">측정값</label>
+          <div class="value-wrap">
+            <input type="text" id="value" inputmode="decimal" placeholder="숫자만 입력">
+            <span class="unit" id="unit">-</span>
+          </div>
+          <p class="hint" id="value-hint">측정 항목을 먼저 고르세요.</p>
+          <p class="field-error" id="value-error"></p>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button type="button" class="btn-primary" id="add-btn">기록 추가</button>
+        <button type="button" class="btn-plain" id="clear-form-btn">지우기</button>
+      </div>
+
+      <!-- 전체 안내 메시지가 나타나는 자리 -->
+      <div id="message" role="status" aria-live="polite"></div>
+    </section>
+
+    <!-- ========== 결과 표 영역 ========== -->
+    <section>
+      <div class="table-head">
+        <h2>측정 기록 (<span id="count">0</span>건)</h2>
+        <div class="table-actions">
+          <span class="save-status" id="save-status" aria-live="polite">자동 저장 켜짐</span>
+          <button type="button" class="btn-primary btn-analyze" id="analyze-btn">분석하기</button>
+          <button type="button" class="btn-delete" id="reset-btn">전체 초기화</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>번호</th>
+              <th>이름</th>
+              <th>나이</th>
+              <th>성별</th>
+              <th>측정 항목</th>
+              <th>측정값</th>
+              <th>삭제</th>
+            </tr>
+          </thead>
+          <tbody id="record-body"></tbody>
+        </table>
+      </div>
+    </section>
+    </div>
+
+    <!-- ========== 화면 2: 분석 결과 화면 (처음에는 숨김) ========== -->
+    <div id="view-analysis" hidden>
+      <h1>분석 결과</h1>
+      <p class="intro" id="analysis-intro"></p>
+      <div class="actions" style="margin: 0 0 24px;">
+        <button type="button" class="btn-plain" id="back-btn">기록 화면으로 돌아가기</button>
+      </div>
+      <div id="analysis-content"></div>
+    </div>
+  </main>
+
+  <script>
+    // ===== 1. 측정 항목 정보 =====
+    // 항목마다 단위와 입력 가능한 범위를 정해 둡니다.
+    // allowNegative: 앉아윗몸앞으로굽히기처럼 음수가 나올 수 있는 항목인지 여부
+    const ITEMS = {
+      "악력":                 { unit: "kg", min: 0,   max: 100, allowNegative: false },
+      "윗몸일으키기(1분)":    { unit: "회", min: 0,   max: 150, allowNegative: false },
+      "팔굽혀펴기":           { unit: "회", min: 0,   max: 200, allowNegative: false },
+      "제자리멀리뛰기":       { unit: "cm", min: 0,   max: 400, allowNegative: false },
+      "앉아윗몸앞으로굽히기": { unit: "cm", min: -30, max: 50,  allowNegative: true  },
+      "왕복오래달리기":       { unit: "회", min: 0,   max: 200, allowNegative: false },
+      "50m 달리기":           { unit: "초", min: 5,   max: 30,  allowNegative: false, lowerIsBetter: true }
+    };
+
+    // ===== 2. 기록을 담아 둘 배열 =====
+    // 각 기록은 { id, name, age, gender, item, value } 모양의 객체입니다.
+    let records = [];
+    let nextId = 1;
+
+    // ===== 3. 자주 쓰는 요소 가져오기 =====
+    const nameInput   = document.getElementById("name");
+    const ageInput    = document.getElementById("age");
+    const genderInput = document.getElementById("gender");
+    const itemInput   = document.getElementById("item");
+    const valueInput  = document.getElementById("value");
+    const unitText    = document.getElementById("unit");
+    const valueHint   = document.getElementById("value-hint");
+    const messageBox  = document.getElementById("message");
+    const tableBody   = document.getElementById("record-body");
+    const countText   = document.getElementById("count");
+
+    // ===== 4. 측정 항목 선택 상자 채우기 =====
+    for (const itemName in ITEMS) {
+      const option = document.createElement("option");
+      option.value = itemName;
+      option.textContent = itemName + " (" + ITEMS[itemName].unit + ")";
+      itemInput.appendChild(option);
+    }
+
+    // 항목을 고르면 단위와 입력 범위 안내를 바꿔 줍니다.
+    itemInput.addEventListener("change", function () {
+      const info = ITEMS[itemInput.value];
+      if (info) {
+        unitText.textContent = info.unit;
+        valueHint.textContent = info.min + " ~ " + info.max + " " + info.unit + " 사이로 입력하세요.";
+      } else {
+        unitText.textContent = "-";
+        valueHint.textContent = "측정 항목을 먼저 고르세요.";
+      }
+    });
+
+    // ===== 5. 입력값 검사 =====
+    // 숫자인지 확인하는 함수: "12", "12.5", "-3" 은 통과, "abc", "12kg" 은 실패
+    function isNumber(text) {
+      return text !== "" && !isNaN(text) && isFinite(text);
+    }
+
+    // 칸 옆에 오류 문구를 표시하거나 지웁니다.
+    function setFieldError(input, errorId, text) {
+      document.getElementById(errorId).textContent = text;
+      if (text) {
+        input.classList.add("invalid");
+      } else {
+        input.classList.remove("invalid");
+      }
+    }
+
+    // 모든 칸을 검사하고, 문제가 있으면 오류 문구 목록을 돌려줍니다.
+    function validate() {
+      const errors = [];
+
+      // (1) 이름
+      const name = nameInput.value.trim();   // trim(): 앞뒤 공백 제거
+      if (name === "") {
+        errors.push("이름 또는 별칭을 입력해 주세요.");
+        setFieldError(nameInput, "name-error", "이름을 입력하세요.");
+      } else {
+        setFieldError(nameInput, "name-error", "");
+      }
+
+      // (2) 나이
+      const age = ageInput.value.trim();
+      if (age === "") {
+        errors.push("나이를 입력해 주세요.");
+        setFieldError(ageInput, "age-error", "나이를 입력하세요.");
+      } else if (!isNumber(age)) {
+        errors.push("나이는 숫자로만 입력해 주세요. (예: 21)");
+        setFieldError(ageInput, "age-error", "숫자만 입력할 수 있어요.");
+      } else if (!Number.isInteger(Number(age)) || Number(age) < 15 || Number(age) > 100) {
+        errors.push("나이는 15에서 100 사이의 정수로 입력해 주세요.");
+        setFieldError(ageInput, "age-error", "15~100 사이 정수로 입력하세요.");
+      } else {
+        setFieldError(ageInput, "age-error", "");
+      }
+
+      // (3) 성별
+      if (genderInput.value === "") {
+        errors.push("성별을 선택해 주세요.");
+        setFieldError(genderInput, "gender-error", "성별을 선택하세요.");
+      } else {
+        setFieldError(genderInput, "gender-error", "");
+      }
+
+      // (4) 측정 항목
+      const info = ITEMS[itemInput.value];
+      if (!info) {
+        errors.push("측정 항목을 선택해 주세요.");
+        setFieldError(itemInput, "item-error", "측정 항목을 선택하세요.");
+      } else {
+        setFieldError(itemInput, "item-error", "");
+      }
+
+      // (5) 측정값
+      const value = valueInput.value.trim();
+      if (value === "") {
+        errors.push("측정값을 입력해 주세요.");
+        setFieldError(valueInput, "value-error", "측정값을 입력하세요.");
+      } else if (!isNumber(value)) {
+        errors.push("측정값은 숫자로만 입력해 주세요. 단위(kg, 회 등)는 빼고 적어요.");
+        setFieldError(valueInput, "value-error", "숫자만 입력할 수 있어요.");
+      } else if (info && (Number(value) < info.min || Number(value) > info.max)) {
+        errors.push(itemInput.value + "의 측정값은 " + info.min + "~" + info.max + " " + info.unit + " 사이여야 해요.");
+        setFieldError(valueInput, "value-error", "범위를 벗어난 값이에요.");
+      } else {
+        setFieldError(valueInput, "value-error", "");
+      }
+
+      return errors;
+    }
+
+    // ===== 6. 안내 메시지 표시 =====
+    function showMessage(type, title, list) {
+      messageBox.className = type;          // "error" 또는 "success"
+      messageBox.innerHTML = "";            // 이전 메시지 지우기
+
+      const strong = document.createElement("strong");
+      strong.textContent = title;
+      messageBox.appendChild(strong);
+
+      if (list && list.length > 0) {
+        const ul = document.createElement("ul");
+        list.forEach(function (text) {
+          const li = document.createElement("li");
+          li.textContent = text;
+          ul.appendChild(li);
+        });
+        messageBox.appendChild(ul);
+      }
+    }
+
+    // ===== 7. 표 그리기 =====
+    function renderTable() {
+      tableBody.innerHTML = "";
+      countText.textContent = records.length;
+
+      // 기록이 없을 때 안내
+      if (records.length === 0) {
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 7;
+        td.className = "empty";
+        td.textContent = "아직 기록이 없습니다. 위에서 측정 결과를 입력해 보세요.";
+        tr.appendChild(td);
+        tableBody.appendChild(tr);
+        return;
+      }
+
+      records.forEach(function (record, index) {
+        const tr = document.createElement("tr");
+
+        // textContent를 쓰면 사용자가 입력한 글자가 HTML 코드로 해석되지 않아 안전합니다.
+        const cells = [
+          index + 1,
+          record.name,
+          record.age + "세",
+          record.gender,
+          record.item,
+          record.value + " " + ITEMS[record.item].unit
+        ];
+        cells.forEach(function (text, i) {
+          const td = document.createElement("td");
+          td.textContent = text;
+          if (i === 0 || i === 5) td.className = "num";
+          tr.appendChild(td);
+        });
+
+        // 삭제 버튼
+        const deleteTd = document.createElement("td");
+        const deleteBtn = document.createElement("button");
+        deleteBtn.type = "button";
+        deleteBtn.className = "btn-delete";
+        deleteBtn.textContent = "삭제";
+        deleteBtn.addEventListener("click", function () {
+          confirmByTwoClicks(deleteBtn, function () { deleteRecord(record.id); });
+        });
+        deleteTd.appendChild(deleteBtn);
+        tr.appendChild(deleteTd);
+
+        tableBody.appendChild(tr);
+      });
+    }
+
+    // ===== 8. 기록 추가 / 삭제 / 초기화 =====
+    // 실수로 지우지 않도록 버튼을 두 번 눌러야 삭제되게 합니다.
+    // 첫 번째 클릭: 버튼 글자가 바뀜 → 3초 안에 한 번 더 누르면 실행
+    function confirmByTwoClicks(button, action) {
+      if (button.dataset.armed === "yes") {
+        action();
+        return;
+      }
+      const originalText = button.textContent;
+      button.dataset.armed = "yes";
+      button.textContent = "한 번 더 누르면 삭제";
+      setTimeout(function () {
+        button.dataset.armed = "";
+        button.textContent = originalText;
+      }, 3000);
+    }
+
+    function addRecord() {
+      const errors = validate();
+      if (errors.length > 0) {
+        showMessage("error", "입력 내용을 확인해 주세요.", errors);
+        return;   // 오류가 있으면 여기서 멈춤
+      }
+
+      records.push({
+        id: nextId++,
+        name: nameInput.value.trim(),
+        age: Number(ageInput.value.trim()),
+        gender: genderInput.value,
+        item: itemInput.value,
+        value: Number(valueInput.value.trim())
+      });
+
+      renderTable();
+
+      // 기록을 추가한 뒤에는 입력 폼 전체를 지워서 다음 사람이 바로 입력할 수 있게 합니다.
+      clearForm();
+      showMessage("success", "기록을 추가했습니다.");
+      saveRecords();   // 추가하자마자 자동 저장
+    }
+
+    function deleteRecord(id) {
+      const target = records.find(function (r) { return r.id === id; });
+      if (!target) return;
+
+      // filter: 조건에 맞는 것만 남김 → 지울 id만 빠짐
+      records = records.filter(function (r) { return r.id !== id; });
+      renderTable();
+      showMessage("success", target.name + "님의 " + target.item + " 기록을 삭제했습니다.");
+      saveRecords();   // 삭제한 상태도 자동 저장
+    }
+
+    function resetAll() {
+      if (records.length === 0) {
+        showMessage("error", "삭제할 기록이 없습니다.");
+        return;
+      }
+      records = [];
+      nextId = 1;
+      renderTable();
+      showMessage("success", "모든 기록을 초기화했습니다.");
+      saveRecords();   // 빈 상태를 저장해서 새로고침해도 비어 있게
+    }
+
+    function clearForm() {
+      nameInput.value = "";
+      ageInput.value = "";
+      genderInput.value = "";
+      itemInput.value = "";
+      valueInput.value = "";
+      itemInput.dispatchEvent(new Event("change"));   // 단위 표시도 원래대로
+      ["name", "age", "gender", "item", "value"].forEach(function (id) {
+        setFieldError(document.getElementById(id), id + "-error", "");
+      });
+      messageBox.className = "";
+      nameInput.focus();
+    }
+
+    // ===== 8-1. 저장하기 / 불러오기 =====
+    // localStorage: 브라우저에 글자를 보관하는 공간. 새로고침하거나 창을 닫아도 남습니다.
+    // 배열은 그대로 저장할 수 없어서 JSON.stringify로 글자로 바꾼 뒤 저장합니다.
+    const STORAGE_KEY = "fitness-records";
+
+    // 기록이 바뀔 때마다(추가, 삭제, 초기화) 자동으로 불립니다.
+    function saveRecords() {
+      const status = document.getElementById("save-status");
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+        // 저장한 시각을 "오후 3:12" 같은 형식으로 표시
+        const time = new Date().toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" });
+        status.textContent = "자동 저장됨 (" + time + ")";
+      } catch (e) {
+        status.textContent = "저장 안 됨";
+        showMessage("error", "이 브라우저에서는 자동 저장을 할 수 없습니다. 비공개(시크릿) 창인지 확인해 주세요.");
+      }
+    }
+
+    function loadRecords() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (!saved) return;                 // 저장된 것이 없으면 그냥 빈 표로 시작
+
+        const list = JSON.parse(saved);     // 글자 → 다시 배열로
+        if (!Array.isArray(list)) return;
+
+        // 항목 이름이 올바른 기록만 남깁니다.
+        records = list.filter(function (r) { return r && ITEMS[r.item]; });
+
+        // 다음 번호는 가장 큰 id보다 1 크게
+        nextId = records.reduce(function (max, r) { return Math.max(max, r.id); }, 0) + 1;
+
+        if (records.length > 0) {
+          showMessage("success", "저장해 둔 기록 " + records.length + "건을 불러왔습니다.");
+        }
+      } catch (e) {
+        records = [];   // 저장 내용이 깨졌거나 읽을 수 없으면 빈 표로 시작
+      }
+    }
+
+    // ===== 9. 버튼과 키보드 연결 =====
+    document.getElementById("add-btn").addEventListener("click", addRecord);
+    const resetBtn = document.getElementById("reset-btn");
+    resetBtn.addEventListener("click", function () {
+      if (records.length === 0) {
+        resetAll();   // 기록이 없으면 안내만 표시
+      } else {
+        confirmByTwoClicks(resetBtn, resetAll);
+      }
+    });
+    document.getElementById("clear-form-btn").addEventListener("click", clearForm);
+
+    // 입력칸에서 Enter 키를 누르면 바로 기록 추가
+    [nameInput, ageInput, valueInput].forEach(function (input) {
+      input.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") addRecord();
+      });
+    });
+
+    // ===== 10. 분석 결과 만들기 =====
+    // 태그를 만들고 글자를 넣는 도우미 함수 (코드를 짧게 쓰기 위해)
+    function el(tag, className, text) {
+      const element = document.createElement(tag);
+      if (className) element.className = className;
+      if (text !== undefined) element.textContent = text;
+      return element;
+    }
+
+    // 소수점 첫째 자리까지 반올림 (예: 32.456 → 32.5)
+    function round1(n) {
+      return Math.round(n * 10) / 10;
+    }
+
+    // a가 b보다 좋은 기록인가? (50m 달리기는 낮을수록 좋음)
+    function isBetter(item, a, b) {
+      return ITEMS[item].lowerIsBetter ? a < b : a > b;
+    }
+
+    // 좋은 기록이 앞에 오도록 정렬한 새 배열을 돌려줌
+    function sortBest(item, list) {
+      return list.slice().sort(function (a, b) {
+        return ITEMS[item].lowerIsBetter ? a.value - b.value : b.value - a.value;
+      });
+    }
+
+    // 순위 = 나보다 좋은 기록의 개수 + 1 (같은 기록은 같은 순위)
+    function rankOf(record) {
+      const better = records.filter(function (o) {
+        return o.item === record.item && isBetter(record.item, o.value, record.value);
+      });
+      return better.length + 1;
+    }
+
+    // 작은 요약 숫자 칸 하나 만들기
+    function addStat(dl, label, value, note) {
+      const box = el("div", "stat");
+      box.appendChild(el("dt", null, label));
+      const dd = el("dd", null, value);
+      if (note) dd.appendChild(el("small", null, note));
+      box.appendChild(dd);
+      dl.appendChild(box);
+    }
+
+    // ===== 10-1. 성별 점 그래프 (도트 플롯) =====
+    // 점 하나 = 한 사람의 기록, 굵은 세로선 = 그 성별의 평균
+    // 인원이 적을 때는 평균 막대만 그리면 한두 명의 값이 숨겨지므로,
+    // 모든 사람을 점으로 보여 주고 평균을 함께 표시합니다.
+    function makeGenderChart(item, list) {
+      const SVG_NS = "http://www.w3.org/2000/svg";
+      // SVG 태그는 createElementNS로 만들어야 화면에 그려집니다.
+      function svgEl(tag, attrs, text) {
+        const node = document.createElementNS(SVG_NS, tag);
+        for (const key in attrs) node.setAttribute(key, attrs[key]);
+        if (text !== undefined) node.textContent = text;
+        return node;
+      }
+
+      const unit = ITEMS[item].unit;
+      const groups = [
+        { name: "남성", cls: "male" },
+        { name: "여성", cls: "female" }
+      ];
+      groups.forEach(function (g) {
+        g.records = list.filter(function (r) { return r.gender === g.name; });
+        // 성별마다 최솟값, 최댓값, 평균을 미리 계산해 둡니다.
+        if (g.records.length > 0) {
+          const vals = g.records.map(function (r) { return r.value; });
+          g.min = Math.min.apply(null, vals);
+          g.max = Math.max.apply(null, vals);
+          g.avg = vals.reduce(function (s, v) { return s + v; }, 0) / vals.length;
+        }
+      });
+
+      const wrap = el("div", "chart-wrap");
+      const used = groups[0].records.concat(groups[1].records);
+      if (used.length === 0) {
+        wrap.appendChild(el("p", "chart-caption", "성별을 남성 또는 여성으로 입력한 기록이 없어 그래프를 그릴 수 없습니다."));
+        return wrap;
+      }
+
+      // 가로축 범위: 가장 작은 값 ~ 가장 큰 값을 눈금 간격(step)에 맞춰 넉넉하게
+      const values = used.map(function (r) { return r.value; });
+      const minV = Math.min.apply(null, values);
+      const maxV = Math.max.apply(null, values);
+      const spread = maxV - minV;
+      const step = spread <= 20 ? 5 : spread <= 60 ? 10 : 20;
+      const lo = Math.max(ITEMS[item].min, Math.floor(minV / step) * step - step);
+      const hi = Math.ceil(maxV / step) * step + step;
+
+      // 그래프 크기: 화면 폭에 맞춰 글자가 너무 작아지지 않게
+      const W = Math.max(300, Math.min(760, document.getElementById("analysis-content").clientWidth - 70));
+      const LEFT = 84, RIGHT = 20, TOP = 12, ROW = 68, AXIS = 30;
+      const H = TOP + ROW * groups.length + AXIS;
+      function x(v) { return LEFT + (v - lo) / (hi - lo) * (W - LEFT - RIGHT); }
+
+      const svg = svgEl("svg", {
+        viewBox: "0 0 " + W + " " + H,
+        role: "img",
+        "aria-label": item + " 성별 분포 그래프"
+      });
+
+      // 눈금선과 숫자
+      for (let v = lo; v <= hi; v += step) {
+        svg.appendChild(svgEl("line", { class: "grid-line", x1: x(v), x2: x(v), y1: TOP, y2: H - AXIS }));
+        svg.appendChild(svgEl("text", { class: "tick", x: x(v), y: H - 10, "text-anchor": "middle" }, v));
+      }
+
+      groups.forEach(function (g, i) {
+        const y = TOP + ROW * i + ROW / 2 + 6;
+
+        // 왼쪽 이름표: "남성" + "2명"
+        svg.appendChild(svgEl("text", { class: "row-label", x: 12, y: y - 2 }, g.name));
+        svg.appendChild(svgEl("text", { class: "row-count", x: 12, y: y + 16 }, g.records.length + "명"));
+        svg.appendChild(svgEl("line", { class: "baseline", x1: LEFT, x2: W - RIGHT, y1: y, y2: y }));
+
+        // 최솟값~최댓값 구간을 연한 띠로 표시 (점보다 먼저 그려서 점 아래에 깔림)
+        if (g.records.length > 1) {
+          svg.appendChild(svgEl("line", { class: "range " + g.cls, x1: x(g.min), x2: x(g.max), y1: y, y2: y }));
+        }
+
+        // 평균선
+        if (g.records.length > 0) {
+          const avg = g.records.reduce(function (s, r) { return s + r.value; }, 0) / g.records.length;
+          svg.appendChild(svgEl("line", { class: "avg", x1: x(avg), x2: x(avg), y1: y - 16, y2: y + 16 }));
+          svg.appendChild(svgEl("text", { class: "avg-label", x: x(avg), y: y - 22, "text-anchor": "middle" },
+            "평균 " + round1(avg)));
+        }
+
+        // 점: 값이 같은 사람이 있으면 위아래로 살짝 비켜서 겹치지 않게
+        const seen = {};
+        g.records.forEach(function (r) {
+          const k = seen[r.value] || 0;
+          seen[r.value] = k + 1;
+          const offset = k === 0 ? 0 : (k % 2 === 1 ? -1 : 1) * Math.ceil(k / 2) * 10;
+          const dot = svgEl("circle", { class: "dot " + g.cls, cx: x(r.value), cy: y + offset, r: 7 });
+          dot.appendChild(svgEl("title", {}, r.name + " " + r.value + " " + unit));  // 마우스를 올리면 이름 표시
+          svg.appendChild(dot);
+        });
+
+        // 최솟값은 점의 왼쪽 아래, 최댓값은 오른쪽 아래에 글자로 표시
+        if (g.records.length === 1) {
+          svg.appendChild(svgEl("text", { class: "minmax-label", x: x(g.min), y: y + 28, "text-anchor": "middle" },
+            "최솟값 = 최댓값 " + g.min));
+        } else if (g.records.length > 1) {
+          svg.appendChild(svgEl("text", { class: "minmax-label", x: x(g.min) + 4, y: y + 28, "text-anchor": "end" },
+            "최솟값 " + g.min));
+          svg.appendChild(svgEl("text", { class: "minmax-label", x: x(g.max) - 4, y: y + 28, "text-anchor": "start" },
+            "최댓값 " + g.max));
+        }
+      });
+
+      const box = el("div", "chart-box");
+      box.appendChild(svg);
+      wrap.appendChild(box);
+
+      // 그래프 아래 성별 최솟값 / 최댓값 표
+      const scroll = el("div", "table-scroll");
+      const table = el("table");
+      const headRow = el("tr");
+      ["성별", "인원", "최솟값", "최댓값", "차이", "평균"].forEach(function (title) {
+        headRow.appendChild(el("th", null, title));
+      });
+      const thead = el("thead");
+      thead.appendChild(headRow);
+      table.appendChild(thead);
+      const tbody = el("tbody");
+      groups.forEach(function (g) {
+        const tr = el("tr");
+        const nameTd = el("td");
+        nameTd.appendChild(el("span", "gender-swatch " + g.cls));
+        nameTd.appendChild(document.createTextNode(g.name));
+        tr.appendChild(nameTd);
+        tr.appendChild(el("td", "num", g.records.length + "명"));
+        if (g.records.length > 0) {
+          tr.appendChild(el("td", "num", g.min + " " + unit));
+          tr.appendChild(el("td", "num", g.max + " " + unit));
+          tr.appendChild(el("td", "num", round1(g.max - g.min) + " " + unit));
+          tr.appendChild(el("td", "num", round1(g.avg) + " " + unit));
+        } else {
+          // 기록이 없는 성별
+          for (let i = 0; i < 4; i++) tr.appendChild(el("td", "num", "기록 없음"));
+        }
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      scroll.appendChild(table);
+      wrap.appendChild(scroll);
+
+      let caption = "점 하나가 한 사람의 기록(" + unit + ")이고, 굵은 세로선이 평균, 연한 띠는 최솟값부터 최댓값까지의 범위입니다. 점에 마우스를 올리면 이름이 보여요.";
+      const skipped = list.length - used.length;
+      if (skipped > 0) caption += " 성별을 ‘선택 안 함’으로 입력한 " + skipped + "명은 제외했습니다.";
+      wrap.appendChild(el("p", "chart-caption", caption));
+
+      // 최댓값 그래프와 최솟값 그래프를 따로 그림
+      wrap.appendChild(el("h3", null, "성별 최댓값과 최솟값"));
+      wrap.appendChild(makeMinMaxCharts(groups, unit));
+      return wrap;
+    }
+
+    // ===== 10-2. 최댓값 / 최솟값 막대그래프 =====
+    // 성별마다 값이 하나씩이라서, 두 값을 비교하기에는 막대그래프가 가장 알기 쉽습니다.
+    // 두 그래프가 같은 눈금(0 ~ 전체 최댓값)을 써야 막대 길이를 서로 비교할 수 있습니다.
+    function makeMinMaxCharts(groups, unit) {
+      const filled = groups.filter(function (g) { return g.records.length > 0; });
+      const scaleMax = Math.max.apply(null, filled.map(function (g) { return g.max; }));
+      const scaleMin = Math.min(0, Math.min.apply(null, filled.map(function (g) { return g.min; })));
+
+      const grid = el("div", "minmax-grid");
+
+      // key가 "max"면 최댓값 그래프, "min"이면 최솟값 그래프
+      [
+        { key: "max", title: "최댓값", sub: "성별에서 가장 높은 기록" },
+        { key: "min", title: "최솟값", sub: "성별에서 가장 낮은 기록" }
+      ].forEach(function (chart) {
+        const card = el("div", "minmax-card");
+        card.appendChild(el("h4", null, chart.title));
+        card.appendChild(el("p", "sub", chart.sub));
+
+        groups.forEach(function (g) {
+          const row = el("div", "mm-row");
+          const label = el("span", "mm-label");
+          label.appendChild(el("span", "gender-swatch " + g.cls));
+          label.appendChild(document.createTextNode(g.name));
+          row.appendChild(label);
+
+          const track = el("div", "mm-track");
+          if (g.records.length > 0) {
+            const value = g[chart.key];   // g.max 또는 g.min
+            const fill = el("div", "mm-fill " + g.cls);
+            const percent = scaleMax === scaleMin ? 100 : (value - scaleMin) / (scaleMax - scaleMin) * 100;
+            fill.style.width = Math.max(2, percent) + "%";
+            track.appendChild(fill);
+            row.appendChild(track);
+            row.appendChild(el("span", "mm-value", value + " " + unit));
+
+            // 그 기록을 낸 사람 (같은 기록이 여럿이면 모두)
+            const who = g.records
+              .filter(function (r) { return r.value === value; })
+              .map(function (r) { return r.name; })
+              .join(", ");
+            row.appendChild(el("span", "mm-who", who));
+          } else {
+            row.appendChild(track);
+            row.appendChild(el("span", "mm-value", "-"));
+            row.appendChild(el("span", "mm-who", "기록 없음"));
+          }
+          card.appendChild(row);
+        });
+
+        // 두 성별의 차이를 문장으로 요약
+        const male = groups[0], female = groups[1];
+        if (male.records.length > 0 && female.records.length > 0) {
+          const diff = round1(male[chart.key] - female[chart.key]);
+          let text;
+          if (diff > 0) text = "남성이 " + diff + " " + unit + " 더 높습니다.";
+          else if (diff < 0) text = "여성이 " + Math.abs(diff) + " " + unit + " 더 높습니다.";
+          else text = "남성과 여성의 " + chart.title + "이 같습니다.";
+          card.appendChild(el("p", "mm-diff", text));
+        }
+
+        grid.appendChild(card);
+      });
+
+      return grid;
+    }
+
+    function renderAnalysis() {
+      const content = document.getElementById("analysis-content");
+      const intro = document.getElementById("analysis-intro");
+      content.innerHTML = "";
+
+      if (records.length === 0) {
+        intro.textContent = "분석할 기록이 없습니다. 기록 화면에서 측정 결과를 먼저 추가해 주세요.";
+        return;
+      }
+      intro.textContent = "지금까지 입력한 기록 " + records.length + "건을 바탕으로 정리했습니다.";
+
+      // (1) 전체 요약 ------------------------------------------
+      // Set: 같은 값을 한 번만 담는 묶음 → 중복 없는 이름 수 세기
+      const people = new Set(records.map(function (r) { return r.name; }));
+      const usedItems = Object.keys(ITEMS).filter(function (item) {
+        return records.some(function (r) { return r.item === item; });
+      });
+
+      const summary = el("section");
+      summary.appendChild(el("h2", null, "전체 요약"));
+      const summaryStats = el("dl", "stats");
+      addStat(summaryStats, "전체 기록", records.length + "건");
+      addStat(summaryStats, "참여 인원", people.size + "명");
+      addStat(summaryStats, "측정한 항목", usedItems.length + "개");
+      summary.appendChild(summaryStats);
+      content.appendChild(summary);
+
+      // (2) 항목별 분석 ----------------------------------------
+      usedItems.forEach(function (item) {
+        const info = ITEMS[item];
+        const list = sortBest(item, records.filter(function (r) { return r.item === item; }));
+        const values = list.map(function (r) { return r.value; });
+        const total = values.reduce(function (sum, v) { return sum + v; }, 0);
+        const best = list[0];
+        const worst = list[list.length - 1];
+
+        const section = el("section");
+        section.appendChild(el("h2", null, item));
+        section.appendChild(el("p", "item-note",
+          info.lowerIsBetter ? "기록이 낮을수록 좋은 항목입니다." : "기록이 높을수록 좋은 항목입니다."));
+
+        const stats = el("dl", "stats");
+        addStat(stats, "측정 인원", list.length + "명");
+        addStat(stats, "평균", round1(total / list.length) + " " + info.unit);
+        addStat(stats, "가장 좋은 기록", best.value + " " + info.unit, best.name);
+        addStat(stats, "가장 아쉬운 기록", worst.value + " " + info.unit, worst.name);
+
+        // 성별 평균 (해당 성별 기록이 있을 때만 표시)
+        ["남성", "여성"].forEach(function (gender) {
+          const group = list.filter(function (r) { return r.gender === gender; });
+          if (group.length > 0) {
+            const sum = group.reduce(function (s, r) { return s + r.value; }, 0);
+            addStat(stats, gender + " 평균", round1(sum / group.length) + " " + info.unit, group.length + "명");
+          }
+        });
+        section.appendChild(stats);
+
+        // 악력은 성별 차이를 한눈에 보도록 점 그래프 추가
+        if (item === "악력") {
+          section.appendChild(el("h3", null, "성별 분포"));
+          section.appendChild(makeGenderChart(item, list));
+        }
+
+        // 순위 막대그래프: 가장 큰 값을 100%로 보고 길이를 정함
+        section.appendChild(el("h3", null, "순위"));
+        const low = Math.min(0, Math.min.apply(null, values));   // 음수 기록도 표시되도록
+        const high = Math.max.apply(null, values);
+        list.forEach(function (r) {
+          const row = el("div", "bar-row");
+          const rank = rankOf(r);
+          if (rank === 1) row.classList.add("is-first");   // 1위는 금색으로 강조
+          const nameCell = el("span", "bar-name");
+          nameCell.appendChild(el("span", "rank", rank + "위"));
+          nameCell.appendChild(document.createTextNode(r.name));
+          row.appendChild(nameCell);
+          const track = el("div", "bar-track");
+          const fill = el("div", "bar-fill");
+          const percent = high === low ? 100 : (r.value - low) / (high - low) * 100;
+          fill.style.width = Math.max(4, percent) + "%";
+          track.appendChild(fill);
+          row.appendChild(track);
+          row.appendChild(el("span", "bar-value", r.value + " " + info.unit));
+          section.appendChild(row);
+        });
+
+        content.appendChild(section);
+      });
+
+      // (3) 개인별 결과 ---------------------------------------
+      const personal = el("section");
+      personal.appendChild(el("h2", null, "개인별 결과"));
+      const scroll = el("div", "table-scroll");
+      const table = el("table");
+      const headRow = el("tr");
+      ["이름", "측정 항목", "측정값", "항목 내 순위"].forEach(function (title) {
+        headRow.appendChild(el("th", null, title));
+      });
+      const thead = el("thead");
+      thead.appendChild(headRow);
+      table.appendChild(thead);
+
+      // 이름 가나다순 → 같은 사람은 항목 순서대로
+      const itemOrder = Object.keys(ITEMS);
+      const sorted = records.slice().sort(function (a, b) {
+        const byName = a.name.localeCompare(b.name, "ko");
+        return byName !== 0 ? byName : itemOrder.indexOf(a.item) - itemOrder.indexOf(b.item);
+      });
+
+      const tbody = el("tbody");
+      sorted.forEach(function (r) {
+        const count = records.filter(function (o) { return o.item === r.item; }).length;
+        const tr = el("tr");
+        tr.appendChild(el("td", null, r.name));
+        tr.appendChild(el("td", null, r.item));
+        tr.appendChild(el("td", "num", r.value + " " + ITEMS[r.item].unit));
+        tr.appendChild(el("td", "num", rankOf(r) + "위 / " + count + "명"));
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      scroll.appendChild(table);
+      personal.appendChild(scroll);
+      content.appendChild(personal);
+    }
+
+    // ===== 11. 화면 전환 =====
+    // 주소 끝이 #analysis 이면 분석 화면, 아니면 기록 화면을 보여 줍니다.
+    // 주소가 바뀌므로 브라우저의 뒤로 가기 버튼도 그대로 작동합니다.
+    function showView() {
+      const isAnalysis = location.hash === "#analysis";
+      document.getElementById("view-record").hidden = isAnalysis;
+      document.getElementById("view-analysis").hidden = !isAnalysis;
+      // 상단 탭에서 지금 보고 있는 화면 표시
+      document.getElementById("tab-record").setAttribute("aria-current", isAnalysis ? "false" : "page");
+      document.getElementById("tab-analysis").setAttribute("aria-current", isAnalysis ? "page" : "false");
+      if (isAnalysis) renderAnalysis();
+      window.scrollTo(0, 0);
+    }
+
+    document.getElementById("analyze-btn").addEventListener("click", function () {
+      location.hash = "analysis";
+    });
+    document.getElementById("back-btn").addEventListener("click", function () {
+      location.hash = "";
+    });
+    window.addEventListener("hashchange", showView);
+
+    // 처음 열었을 때 저장된 기록을 불러오고 표를 그립니다.
+    loadRecords();
+    renderTable();
+    showView();
+  </script>
+</body>
+</html>
